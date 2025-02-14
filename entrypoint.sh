@@ -2,7 +2,7 @@
 
 cp /action/problem-matcher.json /github/workflow/problem-matcher.json
 
-git clone --depth 1 -b 2.3.0 https://github.com/WordPress/WordPress-Coding-Standards.git ~/wpcs
+git clone --depth 1 -b 3.1.0 https://github.com/WordPress/WordPress-Coding-Standards.git ~/wpcs
 
 git config --global --add safe.directory $(pwd)
 
@@ -102,7 +102,7 @@ fi
 
 if [ "${INPUT_STANDARD}" = "WordPress-VIP-Go" ] || [ "${INPUT_STANDARD}" = "WordPressVIPMinimum" ]; then
     echo "Setting up VIPCS"
-    git clone --depth 1 -b 2.3.3 https://github.com/Automattic/VIP-Coding-Standards.git ${HOME}/vipcs
+    git clone --depth 1 -b 3.0.1 https://github.com/Automattic/VIP-Coding-Standards.git ${HOME}/vipcs
     git clone https://github.com/sirbrillig/phpcs-variable-analysis ${HOME}/variable-analysis
 
     decide_all_files_or_changed "${HOME}/wpcs,${HOME}/vipcs,${HOME}/variable-analysis"
@@ -112,7 +112,7 @@ elif [ "${INPUT_STANDARD}" = "10up-Default" ]; then
     git clone https://github.com/PHPCompatibility/PHPCompatibilityWP ${HOME}/phpcompatwp
     git clone https://github.com/PHPCompatibility/PHPCompatibility ${HOME}/phpcompat
     git clone https://github.com/PHPCompatibility/PHPCompatibilityParagonie ${HOME}/phpcompat-paragonie
-    git clone --depth 1 --branch 1.0.11 https://github.com/PHPCSStandards/PHPCSUtils ${HOME}/phpcsutils
+    git clone --depth 1 --branch 1.0.12 https://github.com/PHPCSStandards/PHPCSUtils ${HOME}/phpcsutils
     git clone --depth 1 --branch develop https://github.com/PHPCSStandards/PHPCSExtra ${HOME}/phpcs-extra
     git clone https://github.com/Automattic/VIP-Coding-Standards ${HOME}/vipcs
     git clone https://github.com/sirbrillig/phpcs-variable-analysis ${HOME}/variable-analysis
