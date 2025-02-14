@@ -1,4 +1,4 @@
-FROM cytopia/phpcs:3-php7.4
+FROM texthtml/phpcs:main
 
 COPY entrypoint.sh \
      problem-matcher.json \
