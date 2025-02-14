@@ -133,6 +133,7 @@ if [ -z "${INPUT_EXCLUDES}" ]; then
     EXCLUDES="node_modules,vendor"
 else
     EXCLUDES="node_modules,vendor,${INPUT_EXCLUDES}"
+    echo "Excluding: ${EXCLUDES}"
 fi
 
 phpcs -i
@@ -157,30 +158,48 @@ fi
 if [ "${HAS_CONFIG}" = true ] && [ "${INPUT_USE_LOCAL_CONFIG}" = "true" ] ; then
   if [ "${INPUT_ONLY_CHANGED_FILES}" = "true" ]; then
       if [ "${INPUT_ONLY_CHANGED_LINES}" = "true" ]; then
+        echo "CHANGED_FILES/CHANGED_LINES yes local -- if"
+        echo "PHPCS COMMAND WILL BE:"
+        echo "phpcs $INPUT_EXTRA_ARGS $CHANGED_FILES"
         set +e
         echo "${CHANGED_FILES}" | xargs -rt ${INPUT_PHPCS_BIN_PATH} -v -p ${WARNING_FLAG} --report=summary ${INPUT_EXTRA_ARGS} | filter_by_changed_lines "${clean_diff_output}"
         status=$?
         set -e
       else
+        echo "CHANGED_FILES/CHANGED_LINES yes local -- if/else"
+        echo "PHPCS COMMAND WILL BE:"
+        echo "phpcs $INPUT_EXTRA_ARGS $CHANGED_FILES"
         echo "${CHANGED_FILES}" | xargs -rt ${INPUT_PHPCS_BIN_PATH} ${WARNING_FLAG} --report=checkstyle ${INPUT_EXTRA_ARGS}
         status=$?
       fi
   else
+      echo "CHANGED_FILES/CHANGED_LINES yes local -- else"
+      echo "PHPCS COMMAND WILL BE:"
+      echo "phpcs $INPUT_EXTRA_ARGS $CHANGED_FILES"
       ${INPUT_PHPCS_BIN_PATH} ${WARNING_FLAG} --report=checkstyle ${INPUT_EXTRA_ARGS}
       status=$?
   fi
 else
   if [ "${INPUT_ONLY_CHANGED_FILES}" = "true" ]; then
     if [ "${INPUT_ONLY_CHANGED_LINES}" = "true" ]; then
+      echo "CHANGED_FILES/CHANGED_LINES no local -- if"
+      echo "PHPCS COMMAND WILL BE:"
+      echo "phpcs $INPUT_EXTRA_ARGS $CHANGED_FILES"
       set +e
       echo "${CHANGED_FILES}" | xargs -rt ${INPUT_PHPCS_BIN_PATH} ${WARNING_FLAG} --report=checkstyle --standard=${INPUT_STANDARD} --extensions=php ${INPUT_EXTRA_ARGS} | filter_by_changed_lines "$(clean_diff_output)"
       status=$?
       set -e
     else
+      echo "CHANGED_FILES/CHANGED_LINES no local -- if/else"
+      echo "PHPCS COMMAND WILL BE:"
+      echo "phpcs $INPUT_EXTRA_ARGS $CHANGED_FILES"
       echo "${CHANGED_FILES}" | xargs -rt ${INPUT_PHPCS_BIN_PATH} ${WARNING_FLAG} --report=checkstyle --standard=${INPUT_STANDARD} --extensions=php ${INPUT_EXTRA_ARGS}
       status=$?
     fi
   else
+      echo "CHANGED_FILES/CHANGED_LINES no local -- else"
+      echo "PHPCS COMMAND WILL BE:"
+      echo "phpcs $INPUT_EXTRA_ARGS $CHANGED_FILES"
     ${INPUT_PHPCS_BIN_PATH} ${WARNING_FLAG} --report=checkstyle --standard=${INPUT_STANDARD} --ignore=${EXCLUDES} --extensions=php ${INPUT_PATHS} ${INPUT_EXTRA_ARGS}
     status=$?
   fi
