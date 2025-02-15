@@ -1,6 +1,6 @@
 #!/bin/sh
-
-cp ./problem-matcher.json /github/workflow/problem-matcher.json
+mkdir -p /github/workflow
+cp /action/problem-matcher.json /github/workflow/problem-matcher.json
 
 git clone --depth 1 -b 3.1.0 https://github.com/WordPress/WordPress-Coding-Standards.git ~/wpcs
 
