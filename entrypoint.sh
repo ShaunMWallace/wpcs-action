@@ -92,7 +92,7 @@ if [ "${INPUT_ONLY_CHANGED_FILES}" = "true" ]; then
     fi
     echo "Will only check changed files (${COMPARE_FROM_REF} -> ${COMPARE_TO_REF})"
     set +e
-    CHANGED_FILES=$(git diff --name-only --diff-filter=d "${COMPARE_FROM_REF}" "${COMPARE_TO_REF}" | xargs -rt ls2>/dev/null)
+    CHANGED_FILES=$(git diff --name-only --diff-filter=d "${COMPARE_FROM_REF}" "${COMPARE_TO_REF}" | xargs -rt ls -1d 2>/dev/null)
     # Use a null delimited diff to handle special characters
     #CHANGED_FILES=$(git diff --name-only -z --diff-filter=d "${COMPARE_FROM_REF}" "${COMPARE_TO_REF}" | xargs -0)
     set -e
