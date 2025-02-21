@@ -4,7 +4,7 @@ cp /action/problem-matcher.json /github/workflow/problem-matcher.json
 
 git clone --depth 1 -b 3.1.0 https://github.com/WordPress/WordPress-Coding-Standards.git ~/wpcs
 
-git config --global --add safe.directory $(pwd)
+git config --global --add safe.directory "$(pwd)"
 
 diff_lines() {
   path=""
@@ -53,35 +53,36 @@ clean_diff_output() {
   step1=$(git diff -U0 --diff-filter=d "${COMPARE_FROM_REF}" "${COMPARE_TO_REF}")
   step2=$(echo "${step1}" | diff_lines)
   step3=$(echo "${step2}" | grep -ve ':-')
-  step4=$(echo "${step3}" | sed 's/:+.*//') # On some platforms, sed needs to have + escaped.  This isn't the case for Alpine sed.
+  step4=$(echo "${step3}" | sed 's/:+.*//')
   step5=$(echo "${step4}" | sed 's/:\\.*//')
 
   echo "${step5}"
 }
 
+# -------------------------------------------------------------------
+# This function sets installed_paths WITHOUT passing changed files to PHPCS.
+# -------------------------------------------------------------------
 decide_all_files_or_changed() {
   standards="$1"
+  # 1) Always set installed_paths once, with NO file paths appended.
+  ${INPUT_PHPCS_BIN_PATH} --config-set installed_paths "${standards}"
 
+  # 2) If "only_changed_files" or "only_changed_lines" is true, we will
+  #    handle that logic in the final PHPCS scan. Not here.
   if [ "${INPUT_ONLY_CHANGED_FILES}" = "true" ]; then
-      if [ "${INPUT_ONLY_CHANGED_LINES}" = "true" ]; then
-        set +e
-        echo "${CHANGED_FILES}" | xargs -rt ${INPUT_PHPCS_BIN_PATH} --config-set installed_paths "${standards}" | filter_by_changed_lines "${clean_diff_output}"
-        set -e
-      else
-        echo "${CHANGED_FILES}" | xargs -rt ${INPUT_PHPCS_BIN_PATH} --config-set installed_paths "${standards}"
-      fi
+      echo "Using only_changed_files. We'll gather changed .php files and pass them to PHPCS."
   else
-      ${INPUT_PHPCS_BIN_PATH} --config-set installed_paths "${standards}"
+      echo "Scanning all files (no file-level restriction here)."
   fi
 }
 
 INPUT_ONLY_CHANGED_FILES=${INPUT_ONLY_CHANGED_FILES:-${INPUT_ONLY_CHANGED_LINES:-"false"}}
 
+# Identify changed refs
 if [ "${INPUT_ONLY_CHANGED_FILES}" = "true" ]; then
     if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
         COMPARE_FROM=origin/${GITHUB_BASE_REF}
         COMPARE_TO=origin/${GITHUB_HEAD_REF}
-
         COMPARE_FROM_REF=$(git merge-base "${COMPARE_FROM}" "${COMPARE_TO}")
         COMPARE_TO_REF=${COMPARE_TO}
     else
@@ -91,26 +92,33 @@ if [ "${INPUT_ONLY_CHANGED_FILES}" = "true" ]; then
         COMPARE_TO_REF="HEAD"
     fi
     echo "Will only check changed files (${COMPARE_FROM_REF} -> ${COMPARE_TO_REF})"
-    set +e
-    CHANGED_FILES=$(git diff --name-only --diff-filter=d "${COMPARE_FROM_REF}" "${COMPARE_TO_REF}" \
-      | grep '\.php$' \
-      | xargs -rt ls -1d 2>/dev/null)
 
-    # Use a null delimited diff to handle special characters
-    #CHANGED_FILES=$(git diff --name-only -z --diff-filter=d "${COMPARE_FROM_REF}" "${COMPARE_TO_REF}" | xargs -0)
+    # Safely gather changed .php files using null-terminated output:
+    set +e
+    CHANGED_FILES=$(
+      git diff --name-only -z --diff-filter=d "${COMPARE_FROM_REF}" "${COMPARE_TO_REF}" \
+      | xargs -0 -r -I{} sh -c '
+          case "$1" in
+            *.php) echo "$1";;
+          esac
+        ' _ {}
+    )
     set -e
-    echo "Will check files:"
+
+    echo "Will check these changed .php files:"
     echo "${CHANGED_FILES}"
 else
     echo "Will check all files"
 fi
 
+# Clone or set up standards
 if [ "${INPUT_STANDARD}" = "WordPress-VIP-Go" ] || [ "${INPUT_STANDARD}" = "WordPressVIPMinimum" ]; then
     echo "Setting up VIPCS"
     git clone --depth 1 -b 3.0.1 https://github.com/Automattic/VIP-Coding-Standards.git ${HOME}/vipcs
     git clone https://github.com/sirbrillig/phpcs-variable-analysis ${HOME}/variable-analysis
 
     decide_all_files_or_changed "${HOME}/wpcs,${HOME}/vipcs,${HOME}/variable-analysis"
+
 elif [ "${INPUT_STANDARD}" = "10up-Default" ]; then
     echo "Setting up 10up-Default"
     git clone https://github.com/10up/phpcs-composer ${HOME}/10up
@@ -123,15 +131,16 @@ elif [ "${INPUT_STANDARD}" = "10up-Default" ]; then
     git clone https://github.com/sirbrillig/phpcs-variable-analysis ${HOME}/variable-analysis
 
     decide_all_files_or_changed "${HOME}/wpcs,${HOME}/10up/10up-Default,${HOME}/phpcompatwp/PHPCompatibilityWP,${HOME}/phpcompat/PHPCompatibility,${HOME}/phpcompat-paragonie/PHPCompatibilityParagonieSodiumCompat,${HOME}/phpcompat-paragonie/PHPCompatibilityParagonieRandomCompat,${HOME}/phpcsutils/PHPCSUtils,${HOME}/vipcs,${HOME}/variable-analysis,${HOME}/phpcs-extra"
-elif [ -z "${INPUT_STANDARD_REPO}" ] || [ "${INPUT_STANDARD_REPO}" = "false" ]; then
-  decide_all_files_or_changed "${HOME}/wpcs"
-else
-  echo "Standard repository: ${INPUT_STANDARD_REPO}"
-  git clone -b ${INPUT_REPO_BRANCH} ${INPUT_STANDARD_REPO} ${HOME}/cs
 
-  decide_all_files_or_changed "${HOME}/wpcs,${HOME}/cs"
+elif [ -z "${INPUT_STANDARD_REPO}" ] || [ "${INPUT_STANDARD_REPO}" = "false" ]; then
+    decide_all_files_or_changed "${HOME}/wpcs"
+else
+    echo "Standard repository: ${INPUT_STANDARD_REPO}"
+    git clone -b "${INPUT_REPO_BRANCH}" "${INPUT_STANDARD_REPO}" ${HOME}/cs
+    decide_all_files_or_changed "${HOME}/wpcs,${HOME}/cs"
 fi
 
+# Build the --ignore param from EXCLUDES, if any
 if [ -z "${INPUT_EXCLUDES}" ]; then
     EXCLUDES="node_modules,vendor"
 else
@@ -143,6 +152,7 @@ phpcs -i
 
 echo "::add-matcher::${RUNNER_TEMP}/_github_workflow/problem-matcher.json"
 
+# Decide warnings
 if [ -z "${INPUT_ENABLE_WARNINGS}" ] || [ "${INPUT_ENABLE_WARNINGS}" = "false" ]; then
     WARNING_FLAG="-n"
     echo "Check for warnings disabled"
@@ -151,43 +161,65 @@ else
     echo "Check for warnings enabled"
 fi
 
-# .phpcs.xml, phpcs.xml, .phpcs.xml.dist, phpcs.xml.dist
+# Detect local config
 if [ -f ".phpcs.xml" ] || [ -f "phpcs.xml" ] || [ -f ".phpcs.xml.dist" ] || [ -f "phpcs.xml.dist" ]; then
     HAS_CONFIG=true
 else
     HAS_CONFIG=false
 fi
 
-if [ "${HAS_CONFIG}" = true ] && [ "${INPUT_USE_LOCAL_CONFIG}" = "true" ] ; then
-  if [ "${INPUT_ONLY_CHANGED_FILES}" = "true" ]; then
-      if [ "${INPUT_ONLY_CHANGED_LINES}" = "true" ]; then
-        set +e
-        echo "${CHANGED_FILES}" | xargs -rt ${INPUT_PHPCS_BIN_PATH} -v -p ${WARNING_FLAG} --report=summary ${INPUT_EXTRA_ARGS} | filter_by_changed_lines "$(clean_diff_output)"
-        status=$?
-        set -e
-      else
-        echo "${CHANGED_FILES}" | xargs -rt ${INPUT_PHPCS_BIN_PATH} ${WARNING_FLAG} --report=checkstyle ${INPUT_EXTRA_ARGS}
-        status=$?
-      fi
-  else
-      ${INPUT_PHPCS_BIN_PATH} ${WARNING_FLAG} --report=checkstyle ${INPUT_EXTRA_ARGS}
-      status=$?
-  fi
-else
-  if [ "${INPUT_ONLY_CHANGED_FILES}" = "true" ]; then
-    if [ "${INPUT_ONLY_CHANGED_LINES}" = "true" ]; then
-      set +e
-      echo "${CHANGED_FILES}" | xargs -rt ${INPUT_PHPCS_BIN_PATH} ${WARNING_FLAG} --report=checkstyle --standard=${INPUT_STANDARD} --extensions=php ${INPUT_EXTRA_ARGS} | filter_by_changed_lines "$(clean_diff_output)"
-      status=$?
-      set -e
+# -------------------------------------------------------------------
+# FINAL SCAN with PHPCS
+# -------------------------------------------------------------------
+
+if [ "${HAS_CONFIG}" = true ] && [ "${INPUT_USE_LOCAL_CONFIG}" = "true" ]; then
+    # If we have a local phpcs.xml and user wants to use it
+    if [ "${INPUT_ONLY_CHANGED_FILES}" = "true" ]; then
+        if [ "${INPUT_ONLY_CHANGED_LINES}" = "true" ]; then
+            set +e
+            echo "${CHANGED_FILES}" | xargs -r ${INPUT_PHPCS_BIN_PATH} \
+                -v -p ${WARNING_FLAG} --report=summary ${INPUT_EXTRA_ARGS} \
+            | filter_by_changed_lines "$(clean_diff_output)"
+            status=$?
+            set -e
+        else
+            # Only changed files, but not line-by-line.
+            # Pass them directly to PHPCS (with local config auto-detected).
+            echo "${CHANGED_FILES}" | xargs -r ${INPUT_PHPCS_BIN_PATH} \
+                ${WARNING_FLAG} --report=checkstyle ${INPUT_EXTRA_ARGS}
+            status=$?
+        fi
     else
-      echo "${CHANGED_FILES}" | xargs -rt ${INPUT_PHPCS_BIN_PATH} ${WARNING_FLAG} --report=checkstyle --standard=${INPUT_STANDARD} --extensions=php ${INPUT_EXTRA_ARGS}
-      status=$?
+        # Scan entire codebase with local config
+        ${INPUT_PHPCS_BIN_PATH} ${WARNING_FLAG} --report=checkstyle ${INPUT_EXTRA_ARGS}
+        status=$?
     fi
-  else
-    ${INPUT_PHPCS_BIN_PATH} ${WARNING_FLAG} --report=checkstyle --standard=${INPUT_STANDARD} --ignore=${EXCLUDES} --extensions=php ${INPUT_PATHS} ${INPUT_EXTRA_ARGS}
-    status=$?
-  fi
+else
+    # No local config or not using it => explicitly pass --standard
+    if [ "${INPUT_ONLY_CHANGED_FILES}" = "true" ]; then
+        if [ "${INPUT_ONLY_CHANGED_LINES}" = "true" ]; then
+            set +e
+            echo "${CHANGED_FILES}" | xargs -r ${INPUT_PHPCS_BIN_PATH} \
+                ${WARNING_FLAG} --report=checkstyle --standard=${INPUT_STANDARD} --extensions=php ${INPUT_EXTRA_ARGS} \
+            | filter_by_changed_lines "$(clean_diff_output)"
+            status=$?
+            set -e
+        else
+            echo "${CHANGED_FILES}" | xargs -r ${INPUT_PHPCS_BIN_PATH} \
+                ${WARNING_FLAG} --report=checkstyle --standard=${INPUT_STANDARD} --extensions=php ${INPUT_EXTRA_ARGS}
+            status=$?
+        fi
+    else
+        # Scan entire repo using standard
+        ${INPUT_PHPCS_BIN_PATH} \
+            ${WARNING_FLAG} --report=checkstyle \
+            --standard=${INPUT_STANDARD} \
+            --ignore=${EXCLUDES} \
+            --extensions=php \
+            ${INPUT_PATHS} \
+            ${INPUT_EXTRA_ARGS}
+        status=$?
+    fi
 fi
 
 echo "::remove-matcher owner=phpcs::"
