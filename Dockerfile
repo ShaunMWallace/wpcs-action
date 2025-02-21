@@ -1,18 +1,21 @@
 FROM texthtml/phpcs:main
 
+# Create the action directory
 RUN mkdir -p /action
-RUN ls -la
 
-COPY entrypoint.sh \
-     problem-matcher.json \
-     /action/
+# Copy in your files
+COPY entrypoint.sh problem-matcher.json /action/
 
-RUN ls -la /action
-
+# Make the script executable
 RUN chmod +x /action/entrypoint.sh
 
+# Install git and bash
 RUN apk update && \
     apk upgrade && \
-    apk add git
+    apk add --no-cache git bash
+
+# Switch to bash in your script by using #!/usr/bin/env bash as the shebang
+# Make sure your entrypoint.sh starts with:
+# #!/usr/bin/env bash
 
 ENTRYPOINT ["/action/entrypoint.sh"]
