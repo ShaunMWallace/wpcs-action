@@ -99,10 +99,10 @@ if [ "${INPUT_ONLY_CHANGED_FILES}" = "true" ]; then
     echo "Changed .php files (raw multiline variable):"
     echo "${CHANGED_FILES}"
 
-    echo "=== DEBUG: CHANGED_FILES in hex ==="
-    # Show hex dump to spot any \r or weird chars
-    echo "${CHANGED_FILES}" | od -An -tx1
-    echo "=== END DEBUG ==="
+    # echo "=== DEBUG: CHANGED_FILES in hex ==="
+    # # Show hex dump to spot any \r or weird chars
+    # echo "${CHANGED_FILES}" | od -An -tx1
+    # echo "=== END DEBUG ==="
 
 else
     echo "Will check all files"
